@@ -73,7 +73,7 @@
 <script>
 const canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
 let gameActive=true,score=0,cameraX=0,cameraY=0;
-const gravity=0.6,blockSize=32,airBlocksCount=15,groundBlocksCount=10,totalWorldHeightBlocks=airBlocksCount+groundBlocksCount;
+const gravity=0.6,blockSize=32,airBlocksCount=15,groundBlocksCount=20,totalWorldHeightBlocks=airBlocksCount+groundBlocksCount;
 const player={x:100,y:100,width:24,height:24,vx:0,vy:0,speed:5,jumpForce:11,grounded:false,health:100,direction:1,color:"#00ffcc"};
 let inventory={scrap:5,door:1,hatch:1,ladder:2,scaffold:4};
 let currentQuest={type:"KILL",target:3,progress:0,desc:"Eliminate 3 mutant variants"};
