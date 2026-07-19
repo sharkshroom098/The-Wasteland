@@ -148,8 +148,8 @@ function resetGame(){
     for(let gx=-50;gx<200;gx++){for(let gy=airBlocksCount;gy<totalWorldHeightBlocks;gy++){worldBlocks[`${gx},${gy}`]=true;}}
     player.y=(airBlocksCount*blockSize)-player.height-10;document.getElementById("gameOverScreen").style.display="none";
     netPlayers=[
-        {name:"Tom",x:150,y:player.y,width:24,height:24,vx:0,vy:0,dir:1,timer:0,color:"#ff00ff"},
-        {name:"Joe",x:250,y:player.y,width:24,height:24,vx:0,vy:0,dir:-1,timer:0,color:"#ffff00"}
+        {name:"Joe",x:150,y:player.y,width:24,height:24,vx:0,vy:0,dir:1,timer:0,color:"#ff00ff"},
+        {name:"Tom",x:250,y:player.y,width:24,height:24,vx:0,vy:0,dir:-1,timer:0,color:"#ffff00"}
     ];
     updateUI();
 }
