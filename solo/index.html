@@ -138,10 +138,10 @@ function cycleInteractionMode(){
     const n=stages[currentMode];currentMode=n[0];btn.innerText=n[1];btn.style.background=n[2];btn.style.borderColor=n[3];sub.style.display=n[4];
 }
 function selectSubItem(type){selectedSubItem=type;document.querySelectorAll('.sub-btn').forEach(b=>b.classList.toggle('active',b.id===`btn-${type}`));}
-
-function saveGame(){localStorage.setItem("Wasteland_save_v5",JSON.stringify({score,playerHealth:player.health,playerX:player.x,playerY:player.y,worldBlocks,worldItems,inventory,currentQuest}));alert("Saved!");}
+/* NPC/Bot save states removed */
+function saveGame(){localStorage.setItem("wasteland_save_v5",JSON.stringify({score,playerHealth:player.health,playerX:player.x,playerY:player.y,worldBlocks,worldItems,inventory,currentQuest}));alert("Saved!");}
 function loadGame(){
-    const data=localStorage.getItem("Wasteland_save_v5");if(!data)return;const saved=JSON.parse(data);
+    const data=localStorage.getItem("wasteland_save_v5");if(!data)return;const saved=JSON.parse(data);
     score=saved.score;player.health=saved.playerHealth;player.x=saved.playerX;player.y=saved.playerY;worldBlocks=saved.worldBlocks;worldItems=saved.worldItems||{};inventory=saved.inventory||inventory;currentQuest=saved.currentQuest||currentQuest;updateUI();bullets=[];enemies=[];gameActive=true;document.getElementById("gameOverScreen").style.display="none";alert("Loaded!");
 }
 function resetGame(){
@@ -253,4 +253,3 @@ init();
 </script>
 </body>
 </html>
-
