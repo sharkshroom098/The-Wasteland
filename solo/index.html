@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>The Wasteland - Survival</title>
+    <title>The Wasteland - Solo</title>
     <style>
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
         body, html { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: monospace; }
@@ -250,6 +250,76 @@ function draw(){
 }
 function gameLoop(){update();draw();requestAnimationFrame(gameLoop);}
 init();
+
+// =================================================================
+// BROKEN-DOWN HOUSE RUINS GENERATOR
+// =================================================================
+function forceGenerateStructures() {
+    const structureChance = 0.9;  // 7% chance to spawn a ruin per column
+    const minStructureGap = 12;    
+    let lastStructureX = -minStructureGap;
+    
+    let maxBx = 0;
+    for (let key in worldBlocks) {
+        let x = parseInt(key.split(',')[0]);
+        if (x > maxBx) maxBx = x;
+    }
+    if (maxBx === 0) maxBx = 300; 
+
+    for (let bx = 0; bx < maxBx; bx++) {
+        if (bx - lastStructureX >= minStructureGap) {
+            if (bx < 2 || bx > 10) { // Keep the player spawn zone clear
+                if (Math.random() < structureChance) {
+                    
+                    // 1. Randomize house dimensions
+                    const houseWidth = Math.floor(Math.random() * (6 - 2 + 1)) + 4;   // 4 to 6 blocks wide
+                    const houseHeight = Math.floor(Math.random() * (20 - 1 + 1)) + 3;  // 3 to 15 blocks tall
+                    const decayFactor = 0.30; // 30% chance a block is missing/broken
+                    
+                    const groundY = airBlocksCount;
+
+                    // 2. Loop through the house grid bounding box
+                    for (let w = 0; w < houseWidth; w++) {
+                        for (let h = 0; h < houseHeight; h++) {
+                            
+                            // Check if this position is a wall, floor, or roof frame coordinate
+                            const isFloor = (h === 0);
+                            const isRoof = (h === houseHeight - 1);
+                            const isLeftWall = (w === 0);
+                            const isRightWall = (w === houseWidth - 1);
+
+                            // Only proceed if we are drawing the outer shell framework
+                            if (isFloor || isRoof || isLeftWall || isRightWall) {
+                                
+                                // Randomly skip blocks to create a "broken-down" decayed look
+                                // Roofs decay more aggressively to look collapsed
+                                const currentDecayChance = isRoof ? decayFactor * 1.5 : decayFactor;
+                                
+                                if (Math.random() > currentDecayChance) {
+                                    let blockX = bx + w;
+                                    let blockY = groundY - 1 - h;
+                                    
+                                    // Protect the world boundaries
+                                    if (blockX < maxBx) {
+                                        let blockKey = `${blockX},${blockY}`;
+                                        worldBlocks[blockKey] = 1; 
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Move the tracker forward by the width of the house plus the gap
+                    lastStructureX = bx + houseWidth;
+                }
+            }
+        }
+    }
+    console.log("Ruined houses injected!");
+}
+
+// Waits half a second for your main engine loop to finish loading the map
+setTimeout(forceGenerateStructures, 500);
 </script>
 </body>
 </html>
