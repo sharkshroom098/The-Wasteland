@@ -321,5 +321,231 @@ function forceGenerateStructures() {
 // Waits half a second for your main engine loop to finish loading the map
 setTimeout(forceGenerateStructures, 500);
 </script>
+ <script>
+(function() {
+    
+    if (typeof inventory !== 'undefined') {
+        inventory.turret = 0;
+        inventory.nuclear = 2; // Start with 2 nuclear blocks
+    }
+    
+    let worldTurrets = []; // Stores localized data for placed turrets
+
+    const styleFix = document.createElement('style');
+    styleFix.innerHTML = `.sub-btn { text-transform: uppercase; }`;
+    document.head.appendChild(styleFix);
+
+    const craftMenuInterval = setInterval(() => {
+        const craftMenu = document.getElementById('craftMenu');
+        if (craftMenu) {
+           
+            const nuclearRow = document.createElement('div');
+            nuclearRow.className = 'craft-row';
+            nuclearRow.innerHTML = `<span>NUCLEAR BLOCK (Cost: 1 Scrap)</span><button class="sub-btn" id="craft-nuclear-btn">CRAFT</button>`;
+            craftMenu.appendChild(nuclearRow);
+
+            const turretRow = document.createElement('div');
+            turretRow.className = 'craft-row';
+            turretRow.innerHTML = `<span>DEFENSE TURRET (Cost: 25 Scrap)</span><button class="sub-btn" id="craft-turret-btn">CRAFT</button>`;
+            craftMenu.appendChild(turretRow);
+
+            document.getElementById('craft-nuclear-btn').addEventListener('click', () => craftCustomItem('nuclear', 1));
+            document.getElementById('craft-turret-btn').addEventListener('click', () => craftCustomItem('turret', 25));
+
+            clearInterval(craftMenuInterval);
+        }
+    }, 100);
+
+    const itemMenuInterval = setInterval(() => {
+        const itemMenu = document.getElementById('itemMenu');
+        if (itemMenu) {
+            
+            const nucBtn = document.createElement('button');
+            nucBtn.id = 'btn-nuclear';
+            nucBtn.className = 'sub-btn';
+            nucBtn.innerHTML = `NUCLEAR (<span id="inv-nuclear">0</span>)`;
+            nucBtn.onclick = () => selectCustomSubItem('nuclear');
+            itemMenu.appendChild(nucBtn);
+
+            const turBtn = document.createElement('button');
+            turBtn.id = 'btn-turret';
+            turBtn.className = 'sub-btn';
+            turBtn.innerHTML = `TURRET (<span id="inv-turret">0</span>)`;
+            turBtn.onclick = () => selectCustomSubItem('turret');
+            itemMenu.appendChild(turBtn);
+
+            clearInterval(itemMenuInterval);
+        }
+    }, 100);
+    function craftCustomItem(item, cost) {
+        if (typeof inventory === 'undefined') return;
+        if (inventory.scrap >= cost) {
+            inventory.scrap -= cost;
+            inventory[item]++;
+            if (typeof createSparks === 'function') createSparks(window.innerWidth/2, window.innerHeight/2, "#ffcc00", 12);
+            if (typeof playWastelandSound === 'function') playWastelandSound('craft');
+            syncCustomUI();
+        } else {
+            if (typeof playWastelandSound === 'function') playWastelandSound('hit');
+        }
+    }
+
+    function selectCustomSubItem(type) {
+        if (typeof selectedSubItem !== 'undefined') {
+            selectedSubItem = type;
+            document.querySelectorAll('.sub-btn').forEach(b => b.classList.toggle('active', b.id === `btn-${type}`));
+            if (typeof playWastelandSound === 'function') playWastelandSound('ui');
+        }
+    }
+    function syncCustomUI() {
+        if (typeof inventory === 'undefined') return;
+        const nucCounter = document.getElementById('inv-nuclear');
+        if (nucCounter) nucCounter.innerText = inventory.nuclear || 0;
+        const turCounter = document.getElementById('inv-turret');
+        if (turCounter) turCounter.innerText = inventory.turret || 0;
+        const scrapCounter = document.getElementById('scrapCount');
+        if (scrapCounter) scrapCounter.innerText = inventory.scrap;
+    }
+    setInterval(syncCustomUI, 200);
+
+    if (typeof processGridAction === 'function') {
+        const originalProcessGridAction = processGridAction;
+
+        processGridAction = function(clickX, clickY) {
+            if (typeof currentMode === 'undefined' || typeof selectedSubItem === 'undefined' || typeof worldBlocks === 'undefined' || typeof worldItems === 'undefined') return;
+            const gx = Math.floor(clickX / blockSize);
+            const gy = Math.floor(clickY / blockSize);
+            const k = `${gx},${gy}`;
+
+            if (currentMode === "ITEMS") {
+                if (selectedSubItem === "nuclear" && inventory.nuclear > 0) {
+                    inventory.nuclear--;
+                    worldBlocks[k] = "nuclear"; 
+                    if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize+blockSize/2, "#ffcc00", 8);
+                    if (typeof playWastelandSound === 'function') playWastelandSound('build');
+                    syncCustomUI();
+                    return;
+                }
+                if (selectedSubItem === "turret" && inventory.turret > 0) {
+                    inventory.turret--;
+                    worldTurrets.push({ x: gx, y: gy, fireTimer: 0 });
+                    worldItems[k] = { x: gx, y: gy, type: "turret_base", open: false };
+                    if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize, "#00ff00", 12);
+                    if (typeof playWastelandSound === 'function') playWastelandSound('build');
+                    syncCustomUI();
+                    return;
+                }
+            }
+            
+            if (currentMode === "DESTROY") {
+                if (worldBlocks[k] === "nuclear") {
+                    delete worldBlocks[k];
+                    if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize+blockSize/2, "#ffcc00", 12);
+                    if (typeof playWastelandSound === 'function') playWastelandSound('hit');
+                    return;
+                }
+                worldTurrets = worldTurrets.filter(t => {
+                    if (t.x === gx && t.y === gy) {
+                        if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize+blockSize/2, "#ff3333", 10);
+                        if (typeof playWastelandSound === 'function') playWastelandSound('hit');
+                        return false;
+                    }
+                    return true;
+                });
+            }
+            originalProcessGridAction(clickX, clickY);
+        };
+    }
+    if (typeof update === 'function') {
+        const originalUpdate = update;
+
+        update = function() {
+            originalUpdate();
+            if (typeof gameActive === 'undefined' || !gameActive || typeof enemies === 'undefined' || typeof bullets === 'undefined') return;
+
+            worldTurrets.forEach(turret => {
+                if (turret.fireTimer > 0) turret.fireTimer--;
+
+                let targetEnemy = null;
+                let closestDist = 280; // 280px operational range
+
+                enemies.forEach(en => {
+                    const dx = (en.x + en.width/2) - (turret.x * blockSize + blockSize/2);
+                    const dy = (en.y + en.height/2) - (turret.y * blockSize + blockSize/2);
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < closestDist) { closestDist = dist; targetEnemy = en; }
+                });
+
+                if (targetEnemy && turret.fireTimer === 0) {
+                    const tX = turret.x * blockSize + blockSize / 2;
+                    const tY = turret.y * blockSize + 6;
+                    const dirX = (targetEnemy.x + targetEnemy.width/2) > tX ? 1 : -1;
+
+                    bullets.push({ x: tX + (dirX === 1 ? 16 : -16), y: tY, vx: dirX * 13, width: 10, height: 3 });
+                    if (typeof playWastelandSound === 'function') playWastelandSound('shoot');
+                    turret.fireTimer = 16; // Reload time rate limit
+                }
+            });
+        };
+    }
+    if (typeof draw === 'function') {
+        const originalDraw = draw;
+
+        draw = function() {
+            originalDraw();
+            if (typeof ctx === 'undefined' || typeof cameraX === 'undefined' || typeof cameraY === 'undefined' || typeof worldBlocks === 'undefined') return;
+
+            ctx.save();
+            ctx.translate(-cameraX, -cameraY);
+
+            for (let key in worldBlocks) {
+                if (worldBlocks[key] === "nuclear") {
+                    const coords = key.split(',').map(Number);
+                    const bx = coords[0] * blockSize; const by = coords[1] * blockSize;
+
+                    if (bx + blockSize > cameraX && bx < window.innerWidth + cameraX && by + blockSize > cameraY && by < window.innerHeight + cameraY) {
+                        ctx.fillStyle = "#ffcc00"; ctx.fillRect(bx, by, blockSize, blockSize);
+                        ctx.strokeStyle = "#000000"; ctx.lineWidth = 2; ctx.strokeRect(bx + 1, by + 1, blockSize - 2, blockSize - 2);
+
+                        ctx.save(); ctx.translate(bx + blockSize / 2, by + blockSize / 2); ctx.fillStyle = "#000000";
+                        ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+
+                        for (let i = 0; i < 3; i++) {
+                            ctx.rotate((120 * Math.PI) / 180); ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(-4, -9);
+                            ctx.arc(0, 0, 10, (-110 * Math.PI) / 180, (-70 * Math.PI) / 180, false); ctx.lineTo(0, -3);
+                            ctx.closePath(); ctx.fill();
+                        }
+                        ctx.restore();
+                    }
+                }
+            }
+            worldTurrets.forEach(turret => {
+                const tx = turret.x * blockSize; const ty = turret.y * blockSize;
+                if (tx + blockSize > cameraX && tx < window.innerWidth + cameraX && ty + blockSize > cameraY && ty < window.innerHeight + cameraY) {
+                    ctx.fillStyle = "#34495e"; ctx.fillRect(tx + 4, ty + blockSize - 8, blockSize - 8, 8);
+                    ctx.fillStyle = "#2c3e50"; ctx.fillRect(tx + 8, ty + blockSize - 14, blockSize - 16, 6);
+                    ctx.fillStyle = "#7f8c8d"; ctx.fillRect(tx + blockSize/2 - 3, ty + 12, 6, 10);
+
+                    let faceDir = 1;
+                    if (typeof enemies !== 'undefined') {
+                        let closestEnemy = null; let minDist = 300;
+                        enemies.forEach(en => {
+                            let d = Math.abs((en.x + en.width/2) - (tx + blockSize/2));
+                            if (d < minDist) { minDist = d; closestEnemy = en; }
+                        });
+                        if (closestEnemy && (closestEnemy.x + closestEnemy.width/2) < (tx + blockSize/2)) faceDir = -1;
+                    }
+                    ctx.fillStyle = "#16a085"; ctx.fillRect(tx + blockSize/2 - 8, ty + 4, 16, 10);
+                    ctx.fillStyle = "#e74c3c"; ctx.fillRect(faceDir === 1 ? tx + blockSize/2 + 4 : tx + blockSize/2 - 7, ty + 6, 3, 3);
+                    ctx.fillStyle = "#2c3e50";
+                    if (faceDir === 1) ctx.fillRect(tx + blockSize/2 + 8, ty + 7, 10, 4);
+                    else ctx.fillRect(tx + blockSize/2 - 18, ty + 7, 10, 4);
+                }
+            });
+            ctx.restore();
+        };
+    }
+})();
+</script>
 </body>
 </html>
