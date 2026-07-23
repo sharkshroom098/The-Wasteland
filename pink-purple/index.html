@@ -6,7 +6,7 @@
 			name="viewport"
 			content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 		/>
-		<title>The Wasteland - Team</title>
+		<title>The Wasteland - Pink-purple</title>
 		<style>
 			* { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
 			body, html { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: monospace; }
@@ -352,7 +352,7 @@
 			    ctx.fillStyle=player.color;ctx.fillRect(player.x,player.y,player.width,player.height);
 			    ctx.fillStyle="#fff";ctx.fillRect(player.direction===1?player.x+player.width-7:player.x+2,player.y+4,5,5);
 			    enemies.forEach(en => { ctx.fillStyle=en.color;ctx.fillRect(en.x,en.y,en.width,en.height);ctx.fillStyle="#ff0000";ctx.fillRect(en.x+(player.x>en.x?en.width-6:2),en.y+6,4,4); });
-			    ctx.fillStyle="#ffcc00";bullets.forEach(b=>ctx.fillRect(b.x,b.y,b.width,b.height));
+			    ctx.fillStyle="#FF007F";bullets.forEach(b=>ctx.fillRect(b.x,b.y,b.width,b.height));
 			    particles.forEach(p=>{ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,3,3);});ctx.restore();
 			}
 			function gameLoop(){update();draw();requestAnimationFrame(gameLoop);}
@@ -504,6 +504,397 @@
 			        window.resetGame = function() {
 			            originalResetGame();
 			            document.getElementById("spawnTeamBtn").style.display = "none";
+			        };
+			    }
+			})();
+		</script>
+		<!-- LONGER DAY/NIGHT CYCLE & AMBUSH BOSS SYSTEM ADD-ON -->
+		<script>
+			(function() {
+			    // 1. Setup State Variables
+			    let timeOfDay = 0; // 0 to 4000 (0-2000 is Day, 2000-4000 is Night - Twice as long!)
+			    let cycleSpeed = 1.5; // Controls how fast time passes
+			    let bossSpawnedThisNight = false;
+			    let originalSpawnEnemy = null;
+
+			    // Create a text display element for the clock
+			    const clockDisplay = document.createElement('div');
+			    clockDisplay.style.cssText = "margin-top: 4px; color: #ff9900; font-weight: bold;";
+			    clockDisplay.id = "hud-clock";
+			    clockDisplay.innerText = "TIME: DAYLIGHT";
+
+			    // Inject the clock safely into your existing UI panel once it loads
+			    const uiInterval = setInterval(() => {
+			        const questPanel = document.getElementById('questPanel');
+			        if (questPanel && questPanel.parentNode) {
+			            questPanel.parentNode.insertBefore(clockDisplay, questPanel);
+			            clearInterval(uiInterval);
+			        }
+			    }, 100);
+
+			    // 2. Intercept and Modify Enemy Spawning Rules
+			    if (typeof spawnEnemy === 'function') {
+			        originalSpawnEnemy = spawnEnemy;
+
+			        // Rewrite the spawner to double night spawns and manage the Boss
+			        spawnEnemy = function() {
+			            if (typeof enemies === 'undefined' || typeof player === 'undefined' || typeof airBlocksCount === 'undefined' || typeof blockSize === 'undefined' || typeof canvas === 'undefined') return;
+
+			            const isNight = (timeOfDay >= 2000);
+
+			            // Double Mutant Spawns at Night: call the original spawner twice per frame check!
+			            if (isNight) {
+			                originalSpawnEnemy();
+			                originalSpawnEnemy();
+			            } else {
+			                originalSpawnEnemy();
+			            }
+
+			            // Giant Ambush Night Boss Spawn Logic
+			            if (isNight && !bossSpawnedThisNight && enemies.length < 15 && Math.random() < 0.05) {
+			                // Determine spawn side based on the direction the player is currently looking
+			                // If player is looking right (direction === 1), spawn him far off-screen to the LEFT, and vice versa.
+			                let spawnX;
+			                if (player.direction === 1) {
+			                    spawnX = player.x - (canvas.width / 2) - 150; // Off-screen behind you (Left)
+			                } else {
+			                    spawnX = player.x + (canvas.width / 2) + 150; // Off-screen behind you (Right)
+			                }
+
+			                enemies.push({
+			                    x: spawnX,
+			                    y: (airBlocksCount - 6) * blockSize, // Spawn slightly higher up to fit its massive frame
+			                    width: 52,       // Double original width (24 -> 52)
+			                    height: 72,      // Double original height (36 -> 72)
+			                    vx: 0,
+			                    vy: 0,
+			                    speed: 4.5,      // Much faster chase speed than a regular mutant
+			                    health: 12,      // Tanky boss health bar (Takes 12 bullet hits)
+			                    color: "#990000", // Dark blood crimson color
+			                    isBoss: true,     // Custom flag for rendering its crown/aura
+			                    animTimer: 0
+			                });
+			                bossSpawnedThisNight = true;
+
+			                // Trigger your sound engine's warning roar if it exists
+			                if (typeof playWastelandSound === 'function') {
+			                    playWastelandSound('gameover');
+			                }
+			            }
+			        };
+			    }
+
+			    // 3. Automation Loop (Tracks Time, Colors Environment, and Resets Night State)
+			    function trackWastelandAtmosphere() {
+			        if (typeof gameActive !== 'undefined' && gameActive) {
+			            // Advance the clock loop
+			            timeOfDay += cycleSpeed;
+			            if (timeOfDay > 4000) {
+			                timeOfDay = 0;
+			                bossSpawnedThisNight = false; // Reset boss flag for the next night cycle
+			            }
+
+			            // Update UI status text
+			            const isNight = (timeOfDay >= 2000);
+			            clockDisplay.innerText = isNight ? "⚠️ NIGHT FALL (DOUBLE MUTANTS)" : " TIME: DAYLIGHT";
+			            clockDisplay.style.color = isNight ? "#ff3333" : "#00ffcc";
+			        }
+			        requestAnimationFrame(trackWastelandAtmosphere);
+			    }
+			    requestAnimationFrame(trackWastelandAtmosphere);
+
+			    // 4. Intercept the Draw Core to Overlay Color Gradients and Boss Auras
+			    if (typeof draw === 'function') {
+			        const originalDraw = draw;
+
+			        draw = function() {
+			            // First run your original graphics frame engine
+			            originalDraw();
+
+			            if (typeof ctx === 'undefined' || typeof canvas === 'undefined' || typeof cameraX === 'undefined' || typeof cameraY === 'undefined' || typeof enemies === 'undefined') return;
+
+			            // Draw a special glowing halo ring underneath the Giant Boss so you can see it in dark conditions
+			            ctx.save();
+			            ctx.translate(-cameraX, -cameraY);
+			            enemies.forEach(en => {
+			                if (en.isBoss) {
+			                    ctx.strokeStyle = "rgba(255, 0, 0, 0.4)";
+			                    ctx.lineWidth = 4;
+
+
+			                    // Add text tracking right above its crown line
+			                    ctx.fillStyle = "#ff3333";
+			                    ctx.font = "bold 11px monospace";
+			                    ctx.textAlign = "center";
+			                    ctx.fillText("⚠️ BOSS", en.x + en.width / 2, en.y - 10);
+			                }
+			            });
+			            ctx.restore();
+
+			            // Calculate Day/Night overlay opacity adjustments dynamically based on 4000 total clock frames
+			            let overlayOpacity = 0;
+			            if (timeOfDay >= 2000 && timeOfDay < 2400) {
+			                // Sunset Transition fading in
+			                overlayOpacity = ((timeOfDay - 2000) / 400) * 0.45;
+			            } else if (timeOfDay >= 2400 && timeOfDay < 3600) {
+			                // Peak midnight darkness value
+			                overlayOpacity = 0.45;
+			            } else if (timeOfDay >= 3600 && timeOfDay <= 4000) {
+			                // Sunrise Transition tint fading back out
+			                overlayOpacity = (1 - ((timeOfDay - 3600) / 400)) * 0.45;
+			            }
+
+			            // Apply full-screen atmospheric tint without breaking game click paths
+			            if (overlayOpacity > 0) {
+			                ctx.fillStyle = `rgba(10, 5, 30, ${overlayOpacity})`; // Moody deep purple/blue shade
+			                ctx.fillRect(0, 0, canvas.width, canvas.height);
+			            }
+			        };
+			    }
+			})();
+		</script>
+		<!-- AUTOMATED TURRETS & NUCLEAR HAZARD BLOCKS SYSTEM - PART 1 -->
+		<script>
+			(function() {
+			    // 1. Extend Inventory and Game State Variables
+			    if (typeof inventory !== 'undefined') {
+			        inventory.turret = 0;
+			        inventory.nuclear = 2; // Start with 2 nuclear blocks
+			    }
+
+			    let worldTurrets = []; // Stores localized data for placed turrets
+
+			    // Setup custom style overrides for button alignment
+			    const styleFix = document.createElement('style');
+			    styleFix.innerHTML = `.sub-btn { text-transform: uppercase; }`;
+			    document.head.appendChild(styleFix);
+
+			    // 2. Inject New Blueprints into the DOM Crafting Menu
+			    const craftMenuInterval = setInterval(() => {
+			        const craftMenu = document.getElementById('craftMenu');
+			        if (craftMenu) {
+			            // Append Nuclear Block Crafting Line
+			            const nuclearRow = document.createElement('div');
+			            nuclearRow.className = 'craft-row';
+			            nuclearRow.innerHTML = `<span>NUCLEAR BLOCK (Cost: 1 Scrap)</span><button class="sub-btn" id="craft-nuclear-btn">CRAFT</button>`;
+			            craftMenu.appendChild(nuclearRow);
+
+			            // Append Turret Crafting Line
+			            const turretRow = document.createElement('div');
+			            turretRow.className = 'craft-row';
+			            turretRow.innerHTML = `<span>DEFENSE TURRET (Cost: 25 Scrap)</span><button class="sub-btn" id="craft-turret-btn">CRAFT</button>`;
+			            craftMenu.appendChild(turretRow);
+
+			            // Bind Event Listeners safely to the new buttons
+			            document.getElementById('craft-nuclear-btn').addEventListener('click', () => craftCustomItem('nuclear', 1));
+			            document.getElementById('craft-turret-btn').addEventListener('click', () => craftCustomItem('turret', 25));
+
+			            clearInterval(craftMenuInterval);
+			        }
+			    }, 100);
+
+			    // 3. Inject Selection Buttons into the Sub-Item Build Bar
+			    const itemMenuInterval = setInterval(() => {
+			        const itemMenu = document.getElementById('itemMenu');
+			        if (itemMenu) {
+			            // Append Nuclear Block Selection Button
+			            const nucBtn = document.createElement('button');
+			            nucBtn.id = 'btn-nuclear';
+			            nucBtn.className = 'sub-btn';
+			            nucBtn.innerHTML = `NUCLEAR (<span id="inv-nuclear">0</span>)`;
+			            nucBtn.onclick = () => selectCustomSubItem('nuclear');
+			            itemMenu.appendChild(nucBtn);
+
+			            // Append Turret Selection Button
+			            const turBtn = document.createElement('button');
+			            turBtn.id = 'btn-turret';
+			            turBtn.className = 'sub-btn';
+			            turBtn.innerHTML = `TURRET (<span id="inv-turret">0</span>)`;
+			            turBtn.onclick = () => selectCustomSubItem('turret');
+			            itemMenu.appendChild(turBtn);
+
+			            clearInterval(itemMenuInterval);
+			        }
+			    }, 100);
+			    // AUTOMATED TURRETS & NUCLEAR HAZARD BLOCKS SYSTEM - PART 2
+			    // Custom Crafting Interceptor logic
+			    function craftCustomItem(item, cost) {
+			        if (typeof inventory === 'undefined') return;
+			        if (inventory.scrap >= cost) {
+			            inventory.scrap -= cost;
+			            inventory[item]++;
+			            if (typeof createSparks === 'function') createSparks(window.innerWidth/2, window.innerHeight/2, "#ffcc00", 12);
+			            if (typeof playWastelandSound === 'function') playWastelandSound('craft');
+			            syncCustomUI();
+			        } else {
+			            if (typeof playWastelandSound === 'function') playWastelandSound('hit');
+			        }
+			    }
+
+			    function selectCustomSubItem(type) {
+			        if (typeof selectedSubItem !== 'undefined') {
+			            selectedSubItem = type;
+			            document.querySelectorAll('.sub-btn').forEach(b => b.classList.toggle('active', b.id === `btn-${type}`));
+			            if (typeof playWastelandSound === 'function') playWastelandSound('ui');
+			        }
+			    }
+
+			    // Hook into UI update cycles to refresh custom item counters
+			    function syncCustomUI() {
+			        if (typeof inventory === 'undefined') return;
+			        const nucCounter = document.getElementById('inv-nuclear');
+			        if (nucCounter) nucCounter.innerText = inventory.nuclear || 0;
+			        const turCounter = document.getElementById('inv-turret');
+			        if (turCounter) turCounter.innerText = inventory.turret || 0;
+			        const scrapCounter = document.getElementById('scrapCount');
+			        if (scrapCounter) scrapCounter.innerText = inventory.scrap;
+			    }
+			    setInterval(syncCustomUI, 200);
+
+			    // 4. Intercept Grid Interaction to handle Custom Item Placement & Destructibility
+			    if (typeof processGridAction === 'function') {
+			        const originalProcessGridAction = processGridAction;
+
+			        processGridAction = function(clickX, clickY) {
+			            if (typeof currentMode === 'undefined' || typeof selectedSubItem === 'undefined' || typeof worldBlocks === 'undefined' || typeof worldItems === 'undefined') return;
+			            const gx = Math.floor(clickX / blockSize);
+			            const gy = Math.floor(clickY / blockSize);
+			            const k = `${gx},${gy}`;
+
+			            if (currentMode === "ITEMS") {
+			                if (selectedSubItem === "nuclear" && inventory.nuclear > 0) {
+			                    inventory.nuclear--;
+			                    worldBlocks[k] = "nuclear";
+			                    if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize+blockSize/2, "#ffcc00", 8);
+			                    if (typeof playWastelandSound === 'function') playWastelandSound('build');
+			                    syncCustomUI();
+			                    return;
+			                }
+			                if (selectedSubItem === "turret" && inventory.turret > 0) {
+			                    inventory.turret--;
+			                    worldTurrets.push({ x: gx, y: gy, fireTimer: 0 });
+			                    worldItems[k] = { x: gx, y: gy, type: "turret_base", open: false };
+			                    if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize, "#00ff00", 12);
+			                    if (typeof playWastelandSound === 'function') playWastelandSound('build');
+			                    syncCustomUI();
+			                    return;
+			                }
+			            }
+
+			            if (currentMode === "DESTROY") {
+			                if (worldBlocks[k] === "nuclear") {
+			                    delete worldBlocks[k];
+			                    if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize+blockSize/2, "#ffcc00", 12);
+			                    if (typeof playWastelandSound === 'function') playWastelandSound('hit');
+			                    return;
+			                }
+			                worldTurrets = worldTurrets.filter(t => {
+			                    if (t.x === gx && t.y === gy) {
+			                        if (typeof createSparks === 'function') createSparks(gx*blockSize+blockSize/2, gy*blockSize+blockSize/2, "#ff3333", 10);
+			                        if (typeof playWastelandSound === 'function') playWastelandSound('hit');
+			                        return false;
+			                    }
+			                    return true;
+			                });
+			            }
+			            originalProcessGridAction(clickX, clickY);
+			        };
+			    }
+			    // AUTOMATED TURRETS & NUCLEAR HAZARD BLOCKS SYSTEM - PART 3
+			    // 5. Physics Tracking Core (Automated Target Scanning & Turret Gunfire Loops)
+			    if (typeof update === 'function') {
+			        const originalUpdate = update;
+
+			        update = function() {
+			            originalUpdate();
+			            if (typeof gameActive === 'undefined' || !gameActive || typeof enemies === 'undefined' || typeof bullets === 'undefined') return;
+
+			            worldTurrets.forEach(turret => {
+			                if (turret.fireTimer > 0) turret.fireTimer--;
+
+			                let targetEnemy = null;
+			                let closestDist = 280; // 280px operational range
+
+			                enemies.forEach(en => {
+			                    const dx = (en.x + en.width/2) - (turret.x * blockSize + blockSize/2);
+			                    const dy = (en.y + en.height/2) - (turret.y * blockSize + blockSize/2);
+			                    const dist = Math.sqrt(dx*dx + dy*dy);
+			                    if (dist < closestDist) { closestDist = dist; targetEnemy = en; }
+			                });
+
+			                if (targetEnemy && turret.fireTimer === 0) {
+			                    const tX = turret.x * blockSize + blockSize / 2;
+			                    const tY = turret.y * blockSize + 6;
+			                    const dirX = (targetEnemy.x + targetEnemy.width/2) > tX ? 1 : -1;
+
+			                    bullets.push({ x: tX + (dirX === 1 ? 16 : -16), y: tY, vx: dirX * 13, width: 10, height: 3 });
+			                    if (typeof playWastelandSound === 'function') playWastelandSound('shoot');
+			                    turret.fireTimer = 16; // Reload time rate limit
+			                }
+			            });
+			        };
+			    }
+
+			    // 6. Graphics Render Interceptor Core (Draws Nuclear Blocks & Turrets)
+			    if (typeof draw === 'function') {
+			        const originalDraw = draw;
+
+			        draw = function() {
+			            originalDraw();
+			            if (typeof ctx === 'undefined' || typeof cameraX === 'undefined' || typeof cameraY === 'undefined' || typeof worldBlocks === 'undefined') return;
+
+			            ctx.save();
+			            ctx.translate(-cameraX, -cameraY);
+
+			            // Draw Nuclear Hazard Solid Architecture
+			            for (let key in worldBlocks) {
+			                if (worldBlocks[key] === "nuclear") {
+			                    const coords = key.split(',').map(Number);
+			                    const bx = coords[0] * blockSize; const by = coords[1] * blockSize;
+
+			                    if (bx + blockSize > cameraX && bx < window.innerWidth + cameraX && by + blockSize > cameraY && by < window.innerHeight + cameraY) {
+			                        ctx.fillStyle = "#ffcc00"; ctx.fillRect(bx, by, blockSize, blockSize);
+			                        ctx.strokeStyle = "#000000"; ctx.lineWidth = 2; ctx.strokeRect(bx + 1, by + 1, blockSize - 2, blockSize - 2);
+
+			                        ctx.save(); ctx.translate(bx + blockSize / 2, by + blockSize / 2); ctx.fillStyle = "#000000";
+			                        ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+
+			                        for (let i = 0; i < 3; i++) {
+			                            ctx.rotate((120 * Math.PI) / 180); ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(-4, -9);
+			                            ctx.arc(0, 0, 10, (-110 * Math.PI) / 180, (-70 * Math.PI) / 180, false); ctx.lineTo(0, -3);
+			                            ctx.closePath(); ctx.fill();
+			                        }
+			                        ctx.restore();
+			                    }
+			                }
+			            }
+
+			            // Draw Automated Defense Turrets
+			            worldTurrets.forEach(turret => {
+			                const tx = turret.x * blockSize; const ty = turret.y * blockSize;
+			                if (tx + blockSize > cameraX && tx < window.innerWidth + cameraX && ty + blockSize > cameraY && ty < window.innerHeight + cameraY) {
+			                    ctx.fillStyle = "#34495e"; ctx.fillRect(tx + 4, ty + blockSize - 8, blockSize - 8, 8);
+			                    ctx.fillStyle = "#2c3e50"; ctx.fillRect(tx + 8, ty + blockSize - 14, blockSize - 16, 6);
+			                    ctx.fillStyle = "#7f8c8d"; ctx.fillRect(tx + blockSize/2 - 3, ty + 12, 6, 10);
+
+			                    let faceDir = 1;
+			                    if (typeof enemies !== 'undefined') {
+			                        let closestEnemy = null; let minDist = 300;
+			                        enemies.forEach(en => {
+			                            let d = Math.abs((en.x + en.width/2) - (tx + blockSize/2));
+			                            if (d < minDist) { minDist = d; closestEnemy = en; }
+			                        });
+			                        if (closestEnemy && (closestEnemy.x + closestEnemy.width/2) < (tx + blockSize/2)) faceDir = -1;
+			                    }
+
+			                    ctx.fillStyle = "#16a085"; ctx.fillRect(tx + blockSize/2 - 8, ty + 4, 16, 10);
+			                    ctx.fillStyle = "#e74c3c"; ctx.fillRect(faceDir === 1 ? tx + blockSize/2 + 4 : tx + blockSize/2 - 7, ty + 6, 3, 3);
+			                    ctx.fillStyle = "#2c3e50";
+			                    if (faceDir === 1) ctx.fillRect(tx + blockSize/2 + 8, ty + 7, 10, 4);
+			                    else ctx.fillRect(tx + blockSize/2 - 18, ty + 7, 10, 4);
+			                }
+			            });
+			            ctx.restore();
 			        };
 			    }
 			})();
